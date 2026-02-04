@@ -1,0 +1,14 @@
+# Frontend dependencies
+streamlit
+requests
+
+# Backend dependencies (for reference)
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+langchain
+langchain-community
+langchain-openai
+openai
