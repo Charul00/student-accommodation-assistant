@@ -3,7 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes import chat
 import os
 
-app = FastAPI(title="Student Accommodation Assistant")
+app = FastAPI(
+    title="Student Accommodation Assistant API",
+    description="AI-powered student accommodation search and policy assistant",
+    version="1.0.0",
+    docs_url="/docs",  # Swagger UI
+    redoc_url="/redoc",  # ReDoc
+)
 
 # Add CORS middleware to allow frontend connections
 app.add_middleware(
