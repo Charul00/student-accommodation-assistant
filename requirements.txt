@@ -1,15 +1,19 @@
 # Backend dependencies for deployment
-fastapi
-uvicorn
-sqlalchemy
-psycopg2-binary
-python-dotenv
-langchain
-langchain-community
-langchain-openai
-langchain-text-splitters
-openai
-faiss-cpu
+fastapi==0.104.1
+uvicorn==0.24.0
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+langchain==0.1.0
+langchain-community==0.0.10
+langchain-openai==0.0.2
+langchain-text-splitters==0.0.1
+langchain-core==0.1.0
+openai==1.6.1
+faiss-cpu==1.7.4
+pydantic==2.5.0
+numpy==1.24.3
+tiktoken==0.5.2
 
 # Frontend dependencies (for reference)
 streamlit
