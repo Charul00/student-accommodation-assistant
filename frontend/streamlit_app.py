@@ -9,7 +9,7 @@ API_URL = os.getenv("API_URL", "https://student-accommodation-assistant.onrender
 st.set_page_config(page_title="Student Accommodation Assistant", page_icon="🏠")
 
 st.title("🏠 Student Accommodation Assistant")
-st.caption("Find the best place for you — smart, personalized, and safe.")
+st.caption("Find the best place for you — smart, personalized, and safe. (Updated)")
 
 # Session chat history
 if "messages" not in st.session_state:
@@ -162,8 +162,22 @@ with st.sidebar:
     
     st.header("🔧 System Status")
     try:
-        # Quick health check
-        health_response = requests.get("http://127.0.0.1:8000", timeout=2)
-        st.success("✅ Backend Connected")
-    except:
+        # Quick health check using the same base URL
+        base_url = os.getenv("API_URL", "https://student-accommodation-assistant.onrender.com/chat").replace("/chat", "")
+        health_response = requests.get(f"{base_url}/health", timeout=10)
+        
+        if health_response.status_code == 200:
+            health_data = health_response.json()
+            if health_data.get("status") == "healthy":
+                st.success("✅ Backend Connected")
+                st.info(f"📊 Database: {health_data.get('accommodations_count', 0)} accommodations available")
+            else:
+                st.warning("⚠️ Backend Connected but Database Issues")
+                st.error(f"Database Error: {health_data.get('error', 'Unknown error')}")
+        else:
+            st.warning(f"⚠️ Backend Response: {health_response.status_code}")
+            
+    except requests.exceptions.ConnectionError:
         st.error("❌ Backend Offline")
+    except Exception as e:
+        st.error(f"❌ Backend Error: {str(e)}")
