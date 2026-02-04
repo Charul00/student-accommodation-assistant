@@ -139,7 +139,7 @@ Response:
             return data
             
         except Exception as e:
-            print(f"❌ SQL Execution Error: {e}")
+            print(f" SQL Execution Error: {e}")
             return []
     
     def clean_sql(self, sql_query: str) -> str:

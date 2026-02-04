@@ -28,11 +28,47 @@ async def startup_event():
     # Only initialize database in production (when DATABASE_URL is set)
     if os.getenv("DATABASE_URL"):
         try:
+            import sys
+            sys.path.append('..')
             from init_db import init_database
             init_database()
+            print("✅ Database initialization completed successfully!")
         except Exception as e:
-            print(f"Database initialization failed: {e}")
+            print(f"❌ Database initialization failed: {e}")
+            import traceback
+            traceback.print_exc()
+            raise e  # Re-raise to make deployment fail if DB init fails
 
 @app.get("/")
 def health_check():
     return {"status": "Backend is running "}
+
+@app.get("/health")
+def detailed_health_check():
+    """Detailed health check including database status"""
+    try:
+        # Check database connection and data
+        import sys
+        sys.path.append('..')
+        from init_db import get_db_connection
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM accommodations;")
+        count = cursor.fetchone()[0]
+        cursor.close()
+        conn.close()
+        
+        return {
+            "status": "healthy",
+            "backend": "running",
+            "database": "connected",
+            "accommodations_count": count
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "backend": "running",
+            "database": "error",
+            "error": str(e)
+        }
