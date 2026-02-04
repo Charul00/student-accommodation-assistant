@@ -1,7 +1,6 @@
 from fastapi import APIRouter
-from app.services.sql_agent import run_sql_query
-from app.services.recommender import recommend
-from app.services.memory import extract_preferences, get_memory_summary, merge_memory_with_query
+from app.services.smart_sql_agent import smart_sql_agent
+from app.services.memory import extract_preferences, get_memory_summary
 from app.services.rag import build_rag_chain
 
 router = APIRouter()
@@ -63,52 +62,22 @@ def chat(query: str):
                 "answer": "Policy information service is currently unavailable. Please contact support for policy questions."
             }
 
-    # 🔹 EXISTING SQL + RECOMMENDATION PATH continues below...
+    # 🔹 NEW SMART SQL AGENT PATH - Uses LangChain + OpenAI for entire flow
     
     # Update memory from current query
     SESSION_MEMORY = extract_preferences(query, SESSION_MEMORY)
-    
-    # 🎯 KEY FIX: Merge memory with current query for comprehensive SQL
-    enhanced_query = merge_memory_with_query(query, SESSION_MEMORY)
     
     # Generate memory summary
     memory_summary = get_memory_summary(SESSION_MEMORY)
     
     print(f"🔸 Original query: {query}")
-    print(f"🔸 Enhanced query: {enhanced_query}")
     print(f"🔸 Current memory: {SESSION_MEMORY}")
 
-    # Use enhanced query for SQL generation
-    sql, results = run_sql_query(enhanced_query)
-
-    # If SQL failed or unsafe
-    if not isinstance(results, list):
-        return {
-            "original_query": query,
-            "enhanced_query": enhanced_query,
-            "generated_sql": sql,
-            "result": results,
-            "memory": SESSION_MEMORY,
-            "memory_summary": memory_summary
-        }
-
-    # Use memory for intelligent recommendations (with safe budget handling)
-    user_preferences = {
-        "max_budget": SESSION_MEMORY.get("budget"),  # Allow None - recommender will handle it
-        "non_alcoholic": SESSION_MEMORY.get("non_alcoholic", False),
-        "furnished": SESSION_MEMORY.get("furnished"),
-        "smoking_allowed": SESSION_MEMORY.get("smoking_allowed"),
-        "preferred_location": SESSION_MEMORY.get("preferred_location"),
-        "room_type": SESSION_MEMORY.get("room_type")
-    }
-
-    recommendations = recommend(results, user_preferences)
-
-    return {
-        "original_query": query,
-        "enhanced_query": enhanced_query,
-        "generated_sql": sql,
-        "memory": SESSION_MEMORY,
-        "memory_summary": memory_summary,
-        "recommendations": recommendations
-    }
+    # Use Smart SQL Agent for complete LangChain-powered processing
+    result = smart_sql_agent.process_query(query, SESSION_MEMORY)
+    
+    # Add memory information to response
+    result["memory"] = SESSION_MEMORY
+    result["memory_summary"] = memory_summary
+    
+    return result
