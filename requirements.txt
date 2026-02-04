@@ -9,6 +9,7 @@ langchain-community
 langchain-openai
 langchain-text-splitters
 langchain-core
+langchain-chroma
 openai
 faiss-cpu
 pydantic

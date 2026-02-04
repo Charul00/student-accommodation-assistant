@@ -42,7 +42,7 @@ def chat(query: str):
     if is_policy_question(query):
         if RAG_CHAIN:
             try:
-                answer = RAG_CHAIN.run(query)
+                answer = RAG_CHAIN.invoke(query)
                 return {
                     "type": "policy_answer",
                     "question": query,

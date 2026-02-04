@@ -4,7 +4,7 @@ import json
 import os
 
 # API URL - can be overridden with environment variable for deployment
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/chat")
+API_URL = os.getenv("API_URL", "https://student-accommodation-assistant.onrender.com/chat")
 
 st.set_page_config(page_title="Student Accommodation Assistant", page_icon="🏠")
 
