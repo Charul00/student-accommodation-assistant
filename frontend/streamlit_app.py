@@ -1,8 +1,10 @@
 import streamlit as st
 import requests
 import json
+import os
 
-API_URL = "http://127.0.0.1:8000/chat"
+# API URL - can be overridden with environment variable for deployment
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/chat")
 
 st.set_page_config(page_title="Student Accommodation Assistant", page_icon="🏠")
 
@@ -114,7 +116,29 @@ if user_input:
 
     except requests.exceptions.ConnectionError:
         with st.chat_message("assistant"):
-            st.error("🚫 **Connection Error:** Cannot connect to the backend server. Please make sure the FastAPI server is running on http://127.0.0.1:8000")
+            st.error("🚫 **Backend Offline:** The backend service is currently unavailable.")
+            st.info("""
+            **Demo Mode Information:**
+            
+            This is the Student Accommodation Assistant! Normally, I would help you:
+            
+            🏠 **Find Accommodations:**
+            - Search PGs and apartments by budget, location, amenities
+            - Get personalized recommendations based on your preferences
+            - Filter by distance from college, safety ratings, and more
+            
+            📋 **Answer Policy Questions:**
+            - Information about alcohol and smoking policies
+            - Required documents for accommodation
+            - Rules and regulations
+            
+            **To fully experience the app, you would need the backend API running.**
+            """)
+            
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": "🚫 Backend currently unavailable. This is a demo of the Student Accommodation Assistant interface."
+        })
     except Exception as e:
         with st.chat_message("assistant"):
             st.error(f"❌ **Error:** {str(e)}")
