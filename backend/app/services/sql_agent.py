@@ -1,6 +1,6 @@
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
-from langchain.chains import create_sql_query_chain
+from langchain_experimental.sql import SQLDatabaseChain
 from langchain.prompts import PromptTemplate
 import os
 from dotenv import load_dotenv
@@ -46,7 +46,6 @@ try:
     db = SQLDatabase.from_uri(DATABASE_URI)
 except Exception as e:
     print(f"Error connecting to database: {e}")
-    print(f"Database URI: postgresql://{DB_USER}:***@{DB_HOST}:{DB_PORT}/{DB_NAME}")
     db = None
 
 llm = ChatOpenAI(
@@ -54,7 +53,20 @@ llm = ChatOpenAI(
     temperature=0
 )
 
-SQL_PROMPT = PromptTemplate.from_template("""
+# Create SQL chain using SQLDatabaseChain
+sql_db_chain = None
+if db:
+    try:
+        sql_db_chain = SQLDatabaseChain.from_llm(
+            llm=llm,
+            db=db,
+            verbose=True,
+            return_intermediate_steps=False
+        )
+    except Exception as e:
+        print(f"Error creating SQL chain: {e}")
+
+SQL_PROMPT_TEXT = """
 You are an expert PostgreSQL assistant for student accommodation search.
 
 Database schema:
@@ -91,13 +103,7 @@ Query rules:
 - Use ILIKE for location matching
 - Order by rent ASC for better results
 - Limit results to max 10 rows
-
-User question: {question}
-
-Generate the SQL query:
-""")
-
-sql_chain = SQL_PROMPT | llm
+"""
 
 def format_natural_response(result, query_type="search"):
     """Format database results into natural language response"""
@@ -155,7 +161,7 @@ def format_sql_result(result):
     return formatted
 
 def run_sql_query(question: str):
-    if db is None:
+    if db is None or sql_db_chain is None:
         return None, "Database connection not available"
     
     try:
@@ -169,22 +175,20 @@ def run_sql_query(question: str):
         except Exception as check_error:
             print(f"🔍 Database check error: {check_error}")
         
-        sql_query = sql_chain.invoke({"question": question})
-        sql_query = clean_sql(sql_query)
+        # Prepare the prompt with context
+        full_question = f"{SQL_PROMPT_TEXT}\n\nUser question: {question}\n\nGenerate the SQL query to find relevant accommodations:"
         
-        print("🔹 GENERATED SQL:\n", sql_query)
-        
-        if not is_safe_sql(sql_query):
-            return sql_query, "❌ Unsafe SQL detected. Only read-only queries are allowed."
-        
-        result = db.run(sql_query)
+        # Use SQLDatabaseChain to run the query
+        result = sql_db_chain.run(full_question)
         print(f"🔹 RAW RESULT: {result}")
         print(f"🔹 RESULT TYPE: {type(result)}")
         
-        # Format result using the new function
+        # For SQLDatabaseChain, result is typically a string, so we need to parse it
+        # Let's format it into the structure expected by the frontend
         formatted_result = format_sql_result(result)
         
-        return sql_query, formatted_result
+        return "SQL query executed", formatted_result
         
     except Exception as e:
+        print(f"🔹 SQL Error: {e}")
         return None, f"🏠 Sorry, we encountered an issue processing your request. Please try rephrasing your query or search for accommodations in major cities like Mumbai, Pune, or Bangalore. Error: {e}"

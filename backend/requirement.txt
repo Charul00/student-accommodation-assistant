@@ -1,4 +1,3 @@
-# Backend dependencies for deployment
 fastapi
 uvicorn
 sqlalchemy
@@ -10,7 +9,3 @@ langchain-openai
 langchain-experimental
 openai
 faiss-cpu
-
-# Frontend dependencies (for reference)
-streamlit
-requests
