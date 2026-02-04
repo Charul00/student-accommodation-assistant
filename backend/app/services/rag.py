@@ -3,7 +3,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
-from langchain.chains import RetrievalQA
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 import os
 
 def build_rag_chain():
@@ -56,11 +58,28 @@ def build_rag_chain():
             temperature=0
         )
 
-        # Create QA chain
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            retriever=vectorstore.as_retriever(k=3),  # Retrieve top 3 most relevant chunks
-            return_source_documents=False
+        # Create prompt template
+        prompt_template = """You are a helpful assistant answering questions about student accommodation policies. 
+        Use the following context to answer the question. If you can't find the answer in the context, say "I don't have enough information to answer that question."
+
+        Context: {context}
+        Question: {question}
+
+        Answer:"""
+
+        prompt = ChatPromptTemplate.from_template(prompt_template)
+
+        # Create retrieval chain using LCEL
+        def format_docs(docs):
+            return "\n\n".join(doc.page_content for doc in docs)
+
+        retriever = vectorstore.as_retriever(k=3)
+        
+        qa_chain = (
+            {"context": retriever | format_docs, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
         )
 
         print("✅ RAG chain built successfully!")
