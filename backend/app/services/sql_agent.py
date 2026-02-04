@@ -8,15 +8,17 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Get database configuration with defaults
-DB_USER = os.getenv('DB_USER', 'charulchim')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'password')
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_PORT = os.getenv('DB_PORT', '5432')
-DB_NAME = os.getenv('DB_NAME', 'accommodation')
+# Get database configuration - prioritize DATABASE_URL for deployment
+DATABASE_URI = os.getenv('DATABASE_URL')
 
-# Construct database URI
-DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+if not DATABASE_URI:
+    # Fallback to individual environment variables (local development)
+    DB_USER = os.getenv('DB_USER', 'charulchim')
+    DB_PASSWORD = os.getenv('DB_PASSWORD', 'password')
+    DB_HOST = os.getenv('DB_HOST', 'localhost')
+    DB_PORT = os.getenv('DB_PORT', '5432')
+    DB_NAME = os.getenv('DB_NAME', 'accommodation')
+    DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # SQL Safety Configuration
 FORBIDDEN_KEYWORDS = ["delete", "drop", "update", "insert", "alter", "truncate"]

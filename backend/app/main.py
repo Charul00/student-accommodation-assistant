@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import chat
+import os
 
 app = FastAPI(title="Student Accommodation Assistant")
 
@@ -14,6 +15,17 @@ app.add_middleware(
 )
 
 app.include_router(chat.router)
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup if needed"""
+    # Only initialize database in production (when DATABASE_URL is set)
+    if os.getenv("DATABASE_URL"):
+        try:
+            from init_db import init_database
+            init_database()
+        except Exception as e:
+            print(f"Database initialization failed: {e}")
 
 @app.get("/")
 def health_check():

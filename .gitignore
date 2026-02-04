@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Environment variables (DO NOT COMMIT)
+.env
+backend/.env
+
 # C extensions
 *.so
 
