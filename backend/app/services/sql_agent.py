@@ -1,7 +1,7 @@
 from langchain_openai import ChatOpenAI
 from langchain_community.utilities import SQLDatabase
-from langchain_experimental.sql import SQLDatabaseChain
-from langchain.prompts import PromptTemplate
+import psycopg2
+from urllib.parse import urlparse
 import os
 from dotenv import load_dotenv
 
@@ -42,6 +42,136 @@ def clean_sql(sql_query) -> str:
         sql_query = sql_query.replace("```\n", "").replace("```", "").strip()
     return sql_query.strip()
 
+# SQL Safety Configuration
+FORBIDDEN_KEYWORDS = ["delete", "drop", "update", "insert", "alter", "truncate"]
+
+def is_safe_sql(sql: str) -> bool:
+    sql_lower = sql.lower()
+    return not any(keyword in sql_lower for keyword in FORBIDDEN_KEYWORDS)
+
+def get_db_connection():
+    """Get direct database connection"""
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        parsed = urlparse(database_url)
+        return psycopg2.connect(
+            host=parsed.hostname,
+            port=parsed.port,
+            database=parsed.path[1:],  # Remove leading '/'
+            user=parsed.username,
+            password=parsed.password
+        )
+    
+    # Fallback for local development
+    return psycopg2.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        port=os.getenv('DB_PORT', '5432'),
+        database=os.getenv('DB_NAME', 'accommodation'),
+        user=os.getenv('DB_USER', 'charulchim'),
+        password=os.getenv('DB_PASSWORD', 'password')
+    )
+
+def simple_search_accommodations(question: str):
+    """Simple accommodation search using basic SQL"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Parse the question for common search patterns
+        question_lower = question.lower()
+        
+        # Build WHERE conditions based on question
+        conditions = ["available = true"]
+        
+        # Location search
+        for location in ['andheri', 'malad', 'bandra', 'powai', 'viman nagar', 'koregaon park', 'baner', 'kharadi', 'wakad', 'koramangala', 'indiranagar', 'electronic city']:
+            if location in question_lower:
+                conditions.append(f"location ILIKE '%{location}%'")
+                break
+        
+        # City search
+        if 'mumbai' in question_lower and not any('location ILIKE' in c for c in conditions[1:]):
+            conditions.append("location ILIKE '%andheri%' OR location ILIKE '%malad%' OR location ILIKE '%bandra%' OR location ILIKE '%powai%'")
+        elif 'pune' in question_lower and not any('location ILIKE' in c for c in conditions[1:]):
+            conditions.append("location ILIKE '%viman nagar%' OR location ILIKE '%koregaon park%' OR location ILIKE '%baner%' OR location ILIKE '%kharadi%' OR location ILIKE '%wakad%'")
+        elif 'bangalore' in question_lower and not any('location ILIKE' in c for c in conditions[1:]):
+            conditions.append("location ILIKE '%koramangala%' OR location ILIKE '%indiranagar%' OR location ILIKE '%electronic city%'")
+        
+        # Budget search
+        if 'under' in question_lower or 'below' in question_lower:
+            import re
+            budget_match = re.search(r'(\d+)k?', question_lower)
+            if budget_match:
+                budget = int(budget_match.group(1))
+                if budget < 1000:  # Assume 'k' format (e.g., "10k")
+                    budget *= 1000
+                conditions.append(f"rent <= {budget}")
+        
+        # Type search
+        if 'pg' in question_lower:
+            conditions.append("type = 'pg'")
+        elif '1bhk' in question_lower or '1 bhk' in question_lower:
+            conditions.append("type = '1bhk'")
+        elif '1rk' in question_lower or '1 rk' in question_lower:
+            conditions.append("type = '1rk'")
+        
+        # Furnished search
+        if 'furnished' in question_lower:
+            conditions.append("furnished = true")
+        elif 'unfurnished' in question_lower:
+            conditions.append("furnished = false")
+        
+        # Alcohol policy
+        if 'alcohol free' in question_lower or 'non alcoholic' in question_lower:
+            conditions.append("non_alcoholic = true")
+        elif 'alcohol allowed' in question_lower:
+            conditions.append("non_alcoholic = false")
+        
+        # Smoking policy
+        if 'no smoking' in question_lower or 'smoke free' in question_lower:
+            conditions.append("smoking_allowed = false")
+        elif 'smoking allowed' in question_lower:
+            conditions.append("smoking_allowed = true")
+        
+        # Build final query
+        where_clause = " AND ".join(conditions)
+        if len(conditions) > 1:  # More than just 'available = true'
+            where_clause = f"({where_clause})"
+        
+        sql = f"""
+        SELECT id, type, rent, location, distance_from_college_km, furnished, 
+               non_alcoholic, smoking_allowed, safety_rating, roommates_allowed, available
+        FROM accommodations 
+        WHERE {where_clause}
+        ORDER BY rent ASC
+        LIMIT 10
+        """
+        
+        print(f"🔹 GENERATED SQL: {sql}")
+        
+        cursor.execute(sql)
+        results = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Format results
+        columns = [
+            "id", "type", "rent", "location", "distance_from_college_km",
+            "furnished", "non_alcoholic", "smoking_allowed", "safety_rating",
+            "roommates_allowed", "available"
+        ]
+        
+        formatted_results = []
+        for row in results:
+            formatted_results.append(dict(zip(columns, row)))
+        
+        return "SQL query executed", formatted_results
+        
+    except Exception as e:
+        print(f"🔹 Search Error: {e}")
+        return None, f"🏠 Sorry, we encountered an issue. Error: {e}"
+
 try:
     db = SQLDatabase.from_uri(DATABASE_URI)
 except Exception as e:
@@ -52,58 +182,6 @@ llm = ChatOpenAI(
     model="gpt-4o-mini",
     temperature=0
 )
-
-# Create SQL chain using SQLDatabaseChain
-sql_db_chain = None
-if db:
-    try:
-        sql_db_chain = SQLDatabaseChain.from_llm(
-            llm=llm,
-            db=db,
-            verbose=True,
-            return_intermediate_steps=False
-        )
-    except Exception as e:
-        print(f"Error creating SQL chain: {e}")
-
-SQL_PROMPT_TEXT = """
-You are an expert PostgreSQL assistant for student accommodation search.
-
-Database schema:
-Table: accommodations
-- id: integer
-- type: pg | 1rk | 1bhk | 3bhk
-- rent: monthly rent in INR
-- location: area name (like "Andheri", "Viman Nagar", "Koregaon Park", etc.)
-- distance_from_college_km: float
-- furnished: boolean
-- non_alcoholic: boolean (True = no alcohol allowed, False = alcohol allowed)
-- smoking_allowed: boolean
-- safety_rating: integer (1 to 5)
-- roommates_allowed: boolean
-- available: boolean
-
-Location matching rules:
-- Use ILIKE for case-insensitive matching
-- For city queries like "Pune", use: location ILIKE '%pune%'
-- For specific areas, use exact matching: location ILIKE '%area_name%'
-
-Lifestyle preference mapping rules:
-- "alcohol-free" or "non-alcoholic" → non_alcoholic = true
-- "alcohol allowed" → non_alcoholic = false
-- "smoking friendly" or "smoking allowed" → smoking_allowed = true  
-- "smoke-free" or "no smoking" → smoking_allowed = false
-- "furnished accommodation" → furnished = true
-- "unfurnished accommodation" → furnished = false
-
-Query rules:
-- Generate ONLY a SELECT query
-- Do NOT use markdown or ```sql
-- Always include WHERE available = true
-- Use ILIKE for location matching
-- Order by rent ASC for better results
-- Limit results to max 10 rows
-"""
 
 def format_natural_response(result, query_type="search"):
     """Format database results into natural language response"""
@@ -161,33 +239,10 @@ def format_sql_result(result):
     return formatted
 
 def run_sql_query(question: str):
-    if db is None or sql_db_chain is None:
-        return None, "Database connection not available"
-    
+    """Run accommodation search query"""
     try:
-        # First, let's check if we have any data at all
-        try:
-            check_data = db.run("SELECT COUNT(*) as total_count FROM accommodations;")
-            print(f"🔍 Total accommodations in database: {check_data}")
-            
-            sample_data = db.run("SELECT location, type, rent, available FROM accommodations LIMIT 5;")
-            print(f"🔍 Sample data: {sample_data}")
-        except Exception as check_error:
-            print(f"🔍 Database check error: {check_error}")
-        
-        # Prepare the prompt with context
-        full_question = f"{SQL_PROMPT_TEXT}\n\nUser question: {question}\n\nGenerate the SQL query to find relevant accommodations:"
-        
-        # Use SQLDatabaseChain to run the query
-        result = sql_db_chain.run(full_question)
-        print(f"🔹 RAW RESULT: {result}")
-        print(f"🔹 RESULT TYPE: {type(result)}")
-        
-        # For SQLDatabaseChain, result is typically a string, so we need to parse it
-        # Let's format it into the structure expected by the frontend
-        formatted_result = format_sql_result(result)
-        
-        return "SQL query executed", formatted_result
+        # Use simple search function instead of complex LangChain chain
+        return simple_search_accommodations(question)
         
     except Exception as e:
         print(f"🔹 SQL Error: {e}")
