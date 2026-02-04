@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
-from app.services.smart_sql_agent import smart_sql_agent
+from app.services.sql_agent import run_sql_query
+from app.services.recommender import recommend
 from app.services.memory import extract_preferences, get_memory_summary
 from app.services.rag import build_rag_chain
 
@@ -162,7 +163,7 @@ def chat(
                 "answer": "Policy information service is currently unavailable. Please contact support for policy questions."
             }
 
-    # 🔹 NEW SMART SQL AGENT PATH - Uses LangChain + OpenAI for entire flow
+    # 🔹 SQL AGENT PATH - Uses working SQL agent
     
     # Update memory from current query
     SESSION_MEMORY = extract_preferences(query, SESSION_MEMORY)
@@ -173,8 +174,29 @@ def chat(
     print(f"🔸 Original query: {query}")
     print(f"🔸 Current memory: {SESSION_MEMORY}")
 
-    # Use Smart SQL Agent for complete LangChain-powered processing
-    result = smart_sql_agent.process_query(query, SESSION_MEMORY)
+    # Use working SQL Agent
+    sql_query, raw_results = run_sql_query(query)
+    
+    if sql_query is None:
+        return {
+            "type": "error",
+            "query": query,
+            "answer": raw_results,  # This contains the error message
+            "memory_summary": memory_summary
+        }
+    
+    # Use recommender to score and rank results
+    scored_results = recommend(raw_results, SESSION_MEMORY)
+    
+    # Format response
+    result = {
+        "type": "accommodation_search",
+        "query": query,
+        "sql_generated": sql_query,
+        "recommendations": scored_results,
+        "memory_summary": memory_summary,
+        "results_count": len(scored_results)
+    }
     
     # Add memory information to response
     result["memory"] = SESSION_MEMORY
