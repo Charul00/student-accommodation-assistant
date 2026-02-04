@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: student-accommodation-backend
+    env: python
+    buildCommand: "cd backend && pip install -r requirement.txt"
+    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.7
+  - type: pserv
+    name: student-accommodation-db
+    env: postgresql
+    plan: free
+    databaseName: accommodation_db
+    user: accommodation_user
